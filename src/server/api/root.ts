@@ -1,6 +1,6 @@
-import { orgRouter } from "./routers/organization";
-import { formRouter } from "./routers/form/form";
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
+import { formRouter } from "./routers/form/form";
+import { orgRouter } from "./routers/organization";
 
 /**
  * This is the primary router for your server.
@@ -8,8 +8,8 @@ import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
  * All routers added in /api/routers should be manually added here.
  */
 export const appRouter = createTRPCRouter({
-  form: formRouter,
-  org: orgRouter,
+	form: formRouter,
+	org: orgRouter,
 });
 
 // export type definition of API

@@ -7,14 +7,14 @@
  * need to use are documented accordingly near the end.
  */
 
-import { initTRPC, TRPCError } from "@trpc/server";
+import { TRPCError, initTRPC } from "@trpc/server";
 import superjson from "superjson";
 import { ZodError } from "zod";
 
+import { satisfiesRole } from "@/lib/satisfiesRole";
 import { getServerAuthSession } from "@/server/auth";
 import { db } from "@/server/db";
-import { roleEnum } from "../db/schema";
-import { satisfiesRole } from "@/lib/satisfiesRole";
+import type { roleEnum } from "../db/schema";
 
 /**
  * 1. CONTEXT
@@ -29,13 +29,13 @@ import { satisfiesRole } from "@/lib/satisfiesRole";
  * @see https://trpc.io/docs/server/context
  */
 export const createTRPCContext = async (opts: { headers: Headers }) => {
-  const session = await getServerAuthSession();
+	const session = await getServerAuthSession();
 
-  return {
-    db,
-    session,
-    ...opts,
-  };
+	return {
+		db,
+		session,
+		...opts,
+	};
 };
 
 /**
@@ -46,17 +46,17 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
  * errors on the backend.
  */
 const t = initTRPC.context<typeof createTRPCContext>().create({
-  transformer: superjson,
-  errorFormatter({ shape, error }) {
-    return {
-      ...shape,
-      data: {
-        ...shape.data,
-        zodError:
-          error.cause instanceof ZodError ? error.cause.flatten() : null,
-      },
-    };
-  },
+	transformer: superjson,
+	errorFormatter({ shape, error }) {
+		return {
+			...shape,
+			data: {
+				...shape.data,
+				zodError:
+					error.cause instanceof ZodError ? error.cause.flatten() : null,
+			},
+		};
+	},
 });
 
 /**
@@ -90,25 +90,25 @@ export const createTRPCRouter = t.router;
 let totalRequests = 1;
 
 const timingMiddleware = t.middleware(async ({ next, path }) => {
-  const start = Date.now();
+	const start = Date.now();
 
-  if (t._config.isDev) {
-    // artificial delay in dev
-    const waitMs = 0; //Math.floor(Math.random() * 400) + 100;
-    console.log(`[TRPC] ${path} waiting ${waitMs}ms`);
-    console.log(`[TRPC] Total requests: ${totalRequests}`);
-    totalRequests++;
-    await new Promise((resolve) => setTimeout(resolve, waitMs));
-  }
+	if (t._config.isDev) {
+		// artificial delay in dev
+		const waitMs = 0; //Math.floor(Math.random() * 400) + 100;
+		console.log(`[TRPC] ${path} waiting ${waitMs}ms`);
+		console.log(`[TRPC] Total requests: ${totalRequests}`);
+		totalRequests++;
+		await new Promise((resolve) => setTimeout(resolve, waitMs));
+	}
 
-  // Todo implement logging like this middleware
+	// Todo implement logging like this middleware
 
-  const result = await next();
+	const result = await next();
 
-  const end = Date.now();
-  console.log(`[TRPC] ${path} took ${end - start}ms to execute`);
+	const end = Date.now();
+	console.log(`[TRPC] ${path} took ${end - start}ms to execute`);
 
-  return result;
+	return result;
 });
 
 /**
@@ -129,43 +129,43 @@ export const publicProcedure = t.procedure.use(timingMiddleware);
  * @see https://trpc.io/docs/procedures
  */
 export const protectedProcedure = t.procedure
-  .use(timingMiddleware)
-  .use(({ ctx, next }) => {
-    if (!ctx.session || !ctx.session.user) {
-      throw new TRPCError({ code: "UNAUTHORIZED" });
-    }
-    return next({
-      ctx: {
-        // infers the `session` as non-nullable
-        session: { ...ctx.session, user: ctx.session.user },
-      },
-    });
-  });
+	.use(timingMiddleware)
+	.use(({ ctx, next }) => {
+		if (!ctx.session || !ctx.session.user) {
+			throw new TRPCError({ code: "UNAUTHORIZED" });
+		}
+		return next({
+			ctx: {
+				// infers the `session` as non-nullable
+				session: { ...ctx.session, user: ctx.session.user },
+			},
+		});
+	});
 
 export type Role = (typeof roleEnum.enumValues)[number];
 
 export const orgScopedProcedure = (requiredRole: Role) => {
-  return protectedProcedure.use(async ({ ctx, next, getRawInput }) => {
-    const request = (await getRawInput()) as { orgId: string };
-    const orgId = request.orgId;
-    console.log(orgId);
-    console.log(ctx.session.user);
-    for (const org of ctx.session.user.organizations) {
-      if (
-        org.organizationId === orgId &&
-        satisfiesRole(org.role as Role, requiredRole)
-      ) {
-        return next({
-          ctx: {
-            ...ctx,
-          },
-        });
-      }
-    }
+	return protectedProcedure.use(async ({ ctx, next, getRawInput }) => {
+		const request = (await getRawInput()) as { orgId: string };
+		const orgId = request.orgId;
+		console.log(orgId);
+		console.log(ctx.session.user);
+		for (const org of ctx.session.user.organizations) {
+			if (
+				org.organizationId === orgId &&
+				satisfiesRole(org.role as Role, requiredRole)
+			) {
+				return next({
+					ctx: {
+						...ctx,
+					},
+				});
+			}
+		}
 
-    throw new TRPCError({
-      code: "UNAUTHORIZED",
-      message: "Not authorized to access organization",
-    });
-  });
+		throw new TRPCError({
+			code: "UNAUTHORIZED",
+			message: "Not authorized to access organization",
+		});
+	});
 };
